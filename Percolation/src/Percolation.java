@@ -261,7 +261,7 @@ public class Percolation {
         if (row <= 0 || col <= 0) {
             throw new IllegalArgumentException();
         }
-        return this.gird[row][col].isOpen;
+        return this.gird[row - 1][col - 1].isOpen;
     }
 
     // is the site (row, col) full?
@@ -269,7 +269,7 @@ public class Percolation {
         if (row <= 0 || col <= 0) {
             throw new IllegalArgumentException();
         }
-        return this.gird[row][col].isFull;
+        return this.gird[row - 1][col - 1].isFull;
     }
 
     // returns the number of open sites
