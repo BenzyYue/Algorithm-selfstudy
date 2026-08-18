@@ -1,256 +1,105 @@
-import edu.princeton.cs.algs4.StdRandom;
-import edu.princeton.cs.algs4.StdStats;
 import edu.princeton.cs.algs4.WeightedQuickUnionUF;
-import java.lang.IllegalArgumentException;
 
 public class Percolation {
-    // private class that used to build a grid
-    private static class site {
-        public boolean isOpen;
-        public boolean isFull;
-        public int row;
-        public int column;
-        public int number;
-
-        public site(int row, int col) {
-            this.isFull = false;
-            this.isOpen = false;
-            this.row = row;
-            this.column = col;
-            this.number = row * col;
-        }
-    }
-
-    private site[][] gird;
-    private int numberOfOpenSites;
+    private Site[][] grid;
     private int size;
+    private int openSites;
+    private int visualBottom;
+    private int visualTop;
     private WeightedQuickUnionUF openUF;
     private WeightedQuickUnionUF percolateUF;
-    private int visualTop;
-    private int visualBottom;
+
+    // private class that used to build a grid
+    private static class Site {
+        private int row;
+        private int col;
+        private int number;
+        private boolean isOpen;
+
+        public Site(int row, int col, int size) {
+            this.row = row;
+            this.col = col;
+            this.number = ((this.row - 1) * size) + this.col;
+            this.isOpen = false;
+        }
+    }
 
     // creates n-by-n grid, with all sites initially blocked
     public Percolation(int n) {
-        if (n <= 0) {
-            throw new java.lang.IllegalArgumentException();
+        if (n == 0) {
+            throw new IllegalArgumentException();
+        } else if (n < 0) {
+            throw new IllegalArgumentException();
         }
-
         this.size = n;
-        this.gird = new site[n][n];
-        this.numberOfOpenSites = 0;
+        this.visualBottom = n * n + 1;
+        this.visualTop = 0;
+        this.openSites = 0;
         this.openUF = new WeightedQuickUnionUF(n * n + 2);
         this.percolateUF = new WeightedQuickUnionUF(n * n + 2);
-        this.visualTop = n * n + 1;
-        this.visualBottom = n * n + 2;
+        this.grid = new Site[this.size][this.size];
 
-        for (int i = 0; i < n; i++){
-            for (int j = 0; j < n; j++){
-                this.gird[i][j].row = i + 1;
-                this.gird[i][j].column = j + 1;
-                this.gird[i][j].isOpen = false;
-                this.gird[i][j].isFull = false;
+        for (int i = 0; i < this.size; i++) {
+            for (int j = 0; j < this.size; j++) {
+                this.grid[i][j] = new Site(i + 1, j + 1, this.size);
+                if (i == 0) {
+                    this.percolateUF.union(this.grid[i][j].number, this.visualTop);
+                    this.openUF.union(this.grid[i][j].number, this.visualTop);
+                }
+
+                if (i == this.size - 1) {
+                    this.percolateUF.union(this.grid[i][j].number, this.visualBottom);
+                }
             }
-        }
-
-        for (int i = 0; i < n; i++){
-            openUF.union(this.gird[0][i].number, visualTop);
-            percolateUF.union(this.gird[0][i].number, visualTop);
-            openUF.union(this.gird[n - 1][i].number, visualBottom);
-            percolateUF.union(this.gird[n - 1][i].number, visualBottom);
         }
     }
 
-    // opens the site (row, col) if it is not open already
-    public void open(int row, int col){
-        if (row <= 0 || col <= 0){
+    // opens the site (row, col) if it's not open already
+    // 1. if this site is not open:
+    //     1.1 check if its neighbor is in the grid:
+    //         1.1.1 if it is:
+    //         1.1.2 if it is not:
+    public void open(int row, int col) {
+        if (!this.isInTheGrid(row, col)) {
             throw new IllegalArgumentException();
         }
-
-        if (!this.isOpen(row, col)){
-            this.gird[row - 1][col - 1].isOpen = true;
-            this.numberOfOpenSites += 1;
-            if (row == 1) {
-                this.gird[row - 1][col - 1].isFull = true;
+        if (!this.isOpen(row, col)) {
+            this.grid[row - 1][col - 1].isOpen = true;
+            this.openSites++;
+            if (this.isInTheGrid(row - 1, col)) {
+                if (this.isOpen(row - 1, col) && this.isFull(row - 1, col)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 2][col - 1].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 2][col - 1].number);
+                } else if (this.isOpen(row - 1, col)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 2][col - 1].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 2][col - 1].number);
+                }
             }
-
-            if (!(this.size == 1)){
-                if (row == 1 && col == 1){
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                } else if (row == 1 && col == this.size) {
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                } else if (row == this.size && col == 1) {
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
-                } else if (row == this.size && col == this.size) {
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col - 2].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        if (this.gird[row - 1][col - 2].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        }
-                    }
-                } else if (row == 1 && col < this.size) {
-                    if (this.gird[row - 1][col - 2].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        if (this.gird[row - 1][col - 2].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                } else if (row == this.size && col < this.size) {
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col - 2].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        }
-                    }
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                } else if (row < this.size && col == 1) {
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                } else if (row < this.size && col == this.size) {
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col - 2].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        if (this.gird[row - 1][col - 2].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        }
-                    }
-                } else {
-                    if (this.gird[row - 2][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        if (this.gird[row - 2][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 2][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row][col - 1].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        if (this.gird[row][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row][col - 1].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col - 2].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        if (this.gird[row - 1][col - 2].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col - 2].number);
-                        }
-                    }
-                    if (this.gird[row - 1][col].isOpen) {
-                        this.openUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        if (this.gird[row - 1][col - 1].isFull) {
-                            this.gird[row - 1][col - 1].isFull = true;
-                            this.percolateUF.union(this.gird[row - 1][col - 1].number, this.gird[row - 1][col].number);
-                        }
-                    }
+            if (this.isInTheGrid(row + 1, col)) {
+                if (this.isOpen(row + 1, col) && this.isFull(row + 1, col)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row][col - 1].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row][col - 1].number);
+                } else if (this.isOpen(row + 1, col)){
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row][col - 1].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row][col - 1].number);
+                }
+            }
+            if (this.isInTheGrid(row, col - 1)) {
+                if (this.isOpen(row, col - 1) && this.isFull(row, col - 1)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col - 2].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col - 2].number);
+                } else if (this.isOpen(row, col - 1)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col - 2].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col - 2].number);
+                }
+            }
+            if (this.isInTheGrid(row, col + 1)) {
+                if (this.isOpen(row, col + 1) && this.isFull(row, col + 1)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col].number);
+                } else if (this.isOpen(row, col + 1)) {
+                    this.openUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col].number);
+                    this.percolateUF.union(this.grid[row - 1][col - 1].number, this.grid[row - 1][col].number);
                 }
             }
         }
@@ -258,28 +107,42 @@ public class Percolation {
 
     // is the site (row, col) open?
     public boolean isOpen(int row, int col) {
-        if (row <= 0 || col <= 0) {
+        if (!this.isInTheGrid(row, col)) {
             throw new IllegalArgumentException();
         }
-        return this.gird[row - 1][col - 1].isOpen;
+        return this.grid[row - 1][col - 1].isOpen;
     }
 
     // is the site (row, col) full?
     public boolean isFull(int row, int col) {
-        if (row <= 0 || col <= 0) {
+        if (!this.isInTheGrid(row, col)) {
             throw new IllegalArgumentException();
         }
-        return this.gird[row - 1][col - 1].isFull;
+        return this.openUF.connected(visualTop, this.grid[row - 1][col - 1].number) && this.isOpen(row, col);
     }
 
-    // returns the number of open sites
+    // return the number of open sites
     public int numberOfOpenSites() {
-        return this.numberOfOpenSites;
+        return this.openSites;
     }
 
     // does the system percolate?
     public boolean percolates() {
+        if (this.size == 1) {
+            return this.percolateUF.connected(this.visualTop, this.visualBottom) && this.isOpen(1, 1);
+        }
         return this.percolateUF.connected(this.visualTop, this.visualBottom);
     }
 
+    // check if a site is in the grid
+    private boolean isInTheGrid(int row, int col) {
+        return (row > 0 && row <= this.size) && (col > 0 && col <= this.size);
+    }
+
+    public static void main(String[] args) {
+        Percolation test = new Percolation(1);
+        test.open(1,1);
+        System.out.println(test.isFull(1,1));
+        System.out.println(test.percolates());
+    }
 }
